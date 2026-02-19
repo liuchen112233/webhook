@@ -70,7 +70,16 @@ function runDeployScript(reason) {
         const isWin = process.platform === 'win32';
         const scriptPath = isWin ? SCRIPT_BAT : SCRIPT_SH;
         const cmd = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
-        const child = exec(cmd, { timeout: CONFIG.EXEC_TIMEOUT });
+        const child = exec(cmd, {
+            timeout: CONFIG.EXEC_TIMEOUT,
+            env: {
+                ...process.env,
+                DEPLOY_GIT_BRANCH: CONFIG.DEPLOY_BRANCH,
+                DEPLOY_PM2_APP_NAME: process.env.DEPLOY_PM2_APP_NAME || 'server',
+                DEPLOY_REMOTE_URL: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+                DEPLOY_LOG_PATH: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
+            }
+        });
 
         // 超时处理
         const timeoutTimer = setTimeout(() => {

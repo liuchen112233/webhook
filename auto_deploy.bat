@@ -2,11 +2,27 @@
 chcp 65001 >nul 2>&1
 
 set "PROJECT_DIR=C:\wwwroot\server"
-set "GIT_BRANCH=dev"
-set "PM2_APP_NAME=app"
+if "%DEPLOY_GIT_BRANCH%"=="" (
+    set "GIT_BRANCH=dev"
+) else (
+    set "GIT_BRANCH=%DEPLOY_GIT_BRANCH%"
+)
+if "%DEPLOY_PM2_APP_NAME%"=="" (
+    set "PM2_APP_NAME=server"
+) else (
+    set "PM2_APP_NAME=%DEPLOY_PM2_APP_NAME%"
+)
 set "SCRIPT_DIR=%~dp0"
-set "DEPLOY_LOG=%SCRIPT_DIR%deploy.log"
-set "REMOTE_URL=git@github.com:liuchen112233/yayaspeakingserver.git"
+if "%DEPLOY_LOG_PATH%"=="" (
+    set "DEPLOY_LOG=%SCRIPT_DIR%deploy.log"
+) else (
+    set "DEPLOY_LOG=%DEPLOY_LOG_PATH%"
+)
+if "%DEPLOY_REMOTE_URL%"=="" (
+    set "REMOTE_URL=git@github.com:liuchen112233/yayaspeakingserver.git"
+) else (
+    set "REMOTE_URL=%DEPLOY_REMOTE_URL%"
+)
 
 set "NOW=%date% %time%"
 echo [%NOW%] START DEPLOY
