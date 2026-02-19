@@ -64,20 +64,21 @@ function verifyGiteeToken(req) {
 // ========== 执行部署脚本（带超时控制） ==========
 const SCRIPT_BAT = path.join(__dirname, 'auto_deploy.bat');
 const SCRIPT_SH = path.join(__dirname, 'auto_deploy.sh');
-function runDeployScript(reason) {
+function runDeployScript(reason, config) {
     return new Promise((resolve, reject) => {
         log(`🚀 开始部署 - 原因：${reason}`);
+        const deployConfig = config || {};
         const isWin = process.platform === 'win32';
         const scriptPath = isWin ? SCRIPT_BAT : SCRIPT_SH;
         const cmd = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
         const child = exec(cmd, {
-            timeout: CONFIG.EXEC_TIMEOUT,
+            timeout: deployConfig.timeout || CONFIG.EXEC_TIMEOUT,
             env: {
                 ...process.env,
-                DEPLOY_GIT_BRANCH: CONFIG.DEPLOY_BRANCH,
-                DEPLOY_PM2_APP_NAME: process.env.DEPLOY_PM2_APP_NAME || 'server',
-                DEPLOY_REMOTE_URL: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
-                DEPLOY_LOG_PATH: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
+                DEPLOY_GIT_BRANCH: deployConfig.branch || CONFIG.DEPLOY_BRANCH,
+                DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName || process.env.DEPLOY_PM2_APP_NAME || 'server',
+                DEPLOY_REMOTE_URL: deployConfig.remoteUrl || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+                DEPLOY_LOG_PATH: deployConfig.logPath || process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
             }
         });
 
@@ -158,8 +159,16 @@ app.post('/webhook', async (req, res) => {
             return res.send('Event ignored');
         }
 
+        const deployConfig = {
+            branch: CONFIG.DEPLOY_BRANCH,
+            pm2AppName: process.env.DEPLOY_PM2_APP_NAME || 'server',
+            remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+            logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
+            timeout: CONFIG.EXEC_TIMEOUT
+        };
+
         // 4. 执行部署（异步，避免请求超时）
-        runDeployScript(deployReason)
+        runDeployScript(deployReason, deployConfig)
             .then((msg) => {
                 log(`✅ ${msg}`);
             })
