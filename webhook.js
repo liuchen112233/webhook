@@ -71,15 +71,19 @@ function runDeployScript(reason, config) {
         const isWin = process.platform === 'win32';
         const scriptPath = isWin ? SCRIPT_BAT : SCRIPT_SH;
         const cmd = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
+        const env = {
+            ...process.env,
+            DEPLOY_GIT_BRANCH: deployConfig.branch || CONFIG.DEPLOY_BRANCH,
+            DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName || process.env.DEPLOY_PM2_APP_NAME || 'server',
+            DEPLOY_REMOTE_URL: deployConfig.remoteUrl || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+            DEPLOY_LOG_PATH: deployConfig.logPath || process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
+        };
+        if (deployConfig.projectDir) {
+            env.DEPLOY_PROJECT_DIR = deployConfig.projectDir;
+        }
         const child = exec(cmd, {
             timeout: deployConfig.timeout || CONFIG.EXEC_TIMEOUT,
-            env: {
-                ...process.env,
-                DEPLOY_GIT_BRANCH: deployConfig.branch || CONFIG.DEPLOY_BRANCH,
-                DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName || process.env.DEPLOY_PM2_APP_NAME || 'server',
-                DEPLOY_REMOTE_URL: deployConfig.remoteUrl || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
-                DEPLOY_LOG_PATH: deployConfig.logPath || process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
-            }
+            env
         });
 
         // 超时处理
@@ -164,7 +168,8 @@ app.post('/webhook', async (req, res) => {
             pm2AppName: process.env.DEPLOY_PM2_APP_NAME || 'server',
             remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
             logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
-            timeout: CONFIG.EXEC_TIMEOUT
+            timeout: CONFIG.EXEC_TIMEOUT,
+            projectDir: "C:\wwwroot\server"
         };
 
         // 4. 执行部署（异步，避免请求超时）
@@ -180,6 +185,74 @@ app.post('/webhook', async (req, res) => {
 
     } catch (err) {
         log(`❌ Webhook接口异常：${err.message}`);
+        res.status(500).send('Internal server error');
+    }
+});
+
+app.post('/webhook_client', async (req, res) => {
+    try {
+        const isGitHub = !!req.headers['x-github-event'];
+        const isGitee = !!req.headers['x-gitee-event'];
+        if (!isGitHub && !isGitee) {
+            log('❌ 未知的Webhook来源');
+            return res.status(400).send('Unsupported source');
+        }
+
+        if (isGitHub && !verifyGitHubSignature(req)) {
+            log('❌ GitHub签名验证失败');
+            return res.status(401).send('Unauthorized');
+        }
+        if (isGitee && !verifyGiteeToken(req)) {
+            log('❌ Gitee Token验证失败');
+            return res.status(401).send('Unauthorized');
+        }
+
+        const event = isGitHub ? req.headers['x-github-event'] : req.headers['x-gitee-event'];
+        const payload = req.body;
+        log(`📩 [frontend] 收到 ${isGitHub ? 'GitHub' : 'Gitee'} 事件：${event}`);
+
+        let shouldDeploy = false;
+        let deployReason = '';
+
+        if (event === 'pull_request' && payload.action === 'closed' && payload.pull_request?.merged) {
+            const targetBranch = payload.pull_request.base.ref;
+            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+                shouldDeploy = true;
+                deployReason = `[frontend] GitHub PR #${payload.number} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+            }
+        } else if (event === 'Merge Request Hook' && payload.action === 'merge') {
+            const targetBranch = payload.target_branch;
+            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+                shouldDeploy = true;
+                deployReason = `[frontend] Gitee MR #${payload.iid} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+            }
+        }
+
+        if (!shouldDeploy) {
+            log(`⏭️  [frontend] 跳过部署（事件不匹配：${event}）`);
+            return res.send('Frontend event ignored');
+        }
+
+        const deployConfig = {
+            branch: CONFIG.DEPLOY_BRANCH,
+            pm2AppName: '', // 前端一般不需要 pm2
+            remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+            logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
+            timeout: CONFIG.EXEC_TIMEOUT,
+            projectDir: "C:\wwwroot\client"
+        };
+
+        runDeployScript(deployReason, deployConfig)
+            .then((msg) => {
+                log(`✅ [frontend] ${msg}`);
+            })
+            .catch((err) => {
+                log(`❌ [frontend] 部署失败：${err.message}`);
+            });
+
+        res.send('Frontend deploy triggered (async)');
+    } catch (err) {
+        log(`❌ [frontend] Webhook接口异常：${err.message}`);
         res.status(500).send('Internal server error');
     }
 });

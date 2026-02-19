@@ -1,7 +1,15 @@
 @echo off
 chcp 65001 >nul 2>&1
 
-set "PROJECT_DIR=C:\wwwroot\server"
+if "%DEPLOY_PROJECT_DIR%"=="" (
+    set "NOW=%date% %time%"
+    echo [%NOW%] ERROR DEPLOY_PROJECT_DIR NOT SET
+    echo [%NOW%] ERROR DEPLOY_PROJECT_DIR NOT SET>>"%SCRIPT_DIR%deploy.log"
+    exit /b 1
+)
+
+set "PROJECT_DIR=%DEPLOY_PROJECT_DIR%"
+for %%I in ("%PROJECT_DIR%") do set "PROJECT_DIR=%%~fI"
 if "%DEPLOY_GIT_BRANCH%"=="" (
     set "GIT_BRANCH=dev"
 ) else (
