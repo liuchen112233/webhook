@@ -94,6 +94,7 @@ if exist "%PROJECT_DIR%\package.json" (
 set "NOW=%date% %time%"
 echo [%NOW%] STEP3 NPM RUN BUILD
 echo [%NOW%] STEP3 NPM RUN BUILD>>"%DEPLOY_LOG%"
+set "HAS_BUILD=0"
 if exist "%PROJECT_DIR%\package.json" (
     cd /d "%PROJECT_DIR%"
     node -e "try{const p=require('./package.json');const s=p.scripts&&p.scripts.build;process.exit(s?0:1);}catch(e){process.exit(1)}"
@@ -102,6 +103,7 @@ if exist "%PROJECT_DIR%\package.json" (
         echo [%NOW%] INFO NO BUILD SCRIPT SKIP BUILD
         echo [%NOW%] INFO NO BUILD SCRIPT SKIP BUILD>>"%DEPLOY_LOG%"
     ) else (
+        set "HAS_BUILD=1"
         call npm run build>>"%DEPLOY_LOG%" 2>&1
         if errorlevel 1 (
             set "NOW=%date% %time%"
@@ -116,15 +118,20 @@ if exist "%PROJECT_DIR%\package.json" (
 )
 
 set "NOW=%date% %time%"
-echo [%NOW%] STEP4 PM2 START %PM2_APP_NAME%
-echo [%NOW%] STEP4 PM2 START %PM2_APP_NAME%>>"%DEPLOY_LOG%"
-set "PATH=%APPDATA%\npm;%ProgramFiles%\nodejs;%PATH%"
-call pm2 start "%PROJECT_DIR%\app.js" --name "%PM2_APP_NAME%" --update-env>>"%DEPLOY_LOG%" 2>&1
-if errorlevel 1 (
-    set "NOW=%date% %time%"
-    echo [%NOW%] ERROR PM2 START FAILED
-    echo [%NOW%] ERROR PM2 START FAILED>>"%DEPLOY_LOG%"
-    exit /b 1
+if "%HAS_BUILD%"=="1" (
+    echo [%NOW%] STEP4 SKIP PM2 START BECAUSE BUILD SCRIPT EXISTS
+    echo [%NOW%] STEP4 SKIP PM2 START BECAUSE BUILD SCRIPT EXISTS>>"%DEPLOY_LOG%"
+) else (
+    echo [%NOW%] STEP4 PM2 START %PM2_APP_NAME%
+    echo [%NOW%] STEP4 PM2 START %PM2_APP_NAME%>>"%DEPLOY_LOG%"
+    set "PATH=%APPDATA%\npm;%ProgramFiles%\nodejs;%PATH%"
+    call pm2 start "%PROJECT_DIR%\app.js" --name "%PM2_APP_NAME%" --update-env>>"%DEPLOY_LOG%" 2>&1
+    if errorlevel 1 (
+        set "NOW=%date% %time%"
+        echo [%NOW%] ERROR PM2 START FAILED
+        echo [%NOW%] ERROR PM2 START FAILED>>"%DEPLOY_LOG%"
+        exit /b 1
+    )
 )
 
 set "NOW=%date% %time%"
