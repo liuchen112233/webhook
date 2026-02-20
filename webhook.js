@@ -169,7 +169,7 @@ app.post('/webhook', async (req, res) => {
             remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
             logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
-            projectDir: "C:\wwwroot\server"
+            projectDir: "server"
         };
 
         // 4. 执行部署（异步，避免请求超时）
@@ -236,10 +236,10 @@ app.post('/webhook_client', async (req, res) => {
         const deployConfig = {
             branch: CONFIG.DEPLOY_BRANCH,
             pm2AppName: '', // 前端一般不需要 pm2
-            remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+            remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/lanya.git',
             logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
-            projectDir: "C:\wwwroot\client"
+            projectDir: "client"
         };
 
         runDeployScript(deployReason, deployConfig)
