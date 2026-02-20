@@ -74,7 +74,7 @@ function runDeployScript(reason, config) {
         const env = {
             ...process.env,
             DEPLOY_GIT_BRANCH: deployConfig.branch || CONFIG.DEPLOY_BRANCH,
-            DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName || process.env.DEPLOY_PM2_APP_NAME || 'server',
+            DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName,
             DEPLOY_REMOTE_URL: deployConfig.remoteUrl || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
             DEPLOY_LOG_PATH: deployConfig.logPath || process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
         };
@@ -165,7 +165,7 @@ app.post('/webhook', async (req, res) => {
 
         const deployConfig = {
             branch: CONFIG.DEPLOY_BRANCH,
-            pm2AppName: process.env.DEPLOY_PM2_APP_NAME || 'server',
+            pm2AppName: 'server',
             remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
             logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
@@ -235,7 +235,7 @@ app.post('/webhook_client', async (req, res) => {
 
         const deployConfig = {
             branch: CONFIG.DEPLOY_BRANCH,
-            pm2AppName: '', // 前端一般不需要 pm2
+            pm2AppName: 'fronted', // 前端一般不需要 pm2
             remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/lanya.git',
             logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
