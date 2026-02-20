@@ -112,7 +112,7 @@ if exist "%PROJECT_DIR%\package.json" (
         echo [%NOW%] INFO NO BUILD SCRIPT SKIP BUILD>>"%DEPLOY_LOG%"
     ) else (
         set "HAS_BUILD=1"
-        call npm run build>>"%DEPLOY_LOG%" 2>&1
+        call npm run build:dev>>"%DEPLOY_LOG%" 2>&1
         if errorlevel 1 (
             set "NOW=%date% %time%"
             echo [%NOW%] ERROR NPM RUN BUILD FAILED

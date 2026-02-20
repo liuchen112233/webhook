@@ -15,7 +15,7 @@ const CONFIG = {
     DEPLOY_BRANCH: 'dev', // 触发部署的分支
     PORT: 9000,
     // 超时时间（防止脚本卡死）
-    EXEC_TIMEOUT: 5 * 60 * 1000 // 5分钟
+    EXEC_TIMEOUT: 30 * 60 * 1000 // 30分钟
 };
 
 let LOG_DIR_PATH = path.isAbsolute(CONFIG.LOG_DIR) ? CONFIG.LOG_DIR : path.join(__dirname, CONFIG.LOG_DIR);
