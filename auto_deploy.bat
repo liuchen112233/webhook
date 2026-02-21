@@ -10,6 +10,8 @@ if "%DEPLOY_PROJECT_DIR%"=="" (
 
 set "PROJECT_DIR=%DEPLOY_PROJECT_DIR%"
 for %%I in ("%PROJECT_DIR%") do set "PROJECT_DIR=%%~fI"
+for %%I in ("%PROJECT_DIR%") do set "PROJECT_ROOT=%%~dpI"
+for %%I in ("%PROJECT_DIR%") do set "PROJECT_NAME=%%~nxI"
 if "%DEPLOY_GIT_BRANCH%"=="" (
     set "GIT_BRANCH=dev"
 ) else (
@@ -44,6 +46,18 @@ echo [%NOW%] STEP0 PM2 STOP %PM2_APP_NAME%>>"%DEPLOY_LOG%"
 call pm2 stop "%PM2_APP_NAME%">>"%DEPLOY_LOG%" 2>&1
 
 :skip_pm2_stop
+
+if /I "%PROJECT_NAME%"=="server" (
+    if exist "%PROJECT_DIR%\public" (
+        set "NOW=%date% %time%"
+        echo [%NOW%] STEP0 BACKUP PUBLIC FROM %PROJECT_DIR%\public TO %PROJECT_ROOT%public
+        echo [%NOW%] STEP0 BACKUP PUBLIC FROM %PROJECT_DIR%\public TO %PROJECT_ROOT%public>>"%DEPLOY_LOG%"
+        if exist "%PROJECT_ROOT%public" (
+            rmdir /s /q "%PROJECT_ROOT%public"
+        )
+        xcopy "%PROJECT_DIR%\public" "%PROJECT_ROOT%public" /E /I /Y>>"%DEPLOY_LOG%" 2>&1
+    )
+)
 
 if exist "%PROJECT_DIR%" (
     set "NOW=%date% %time%"
@@ -90,6 +104,18 @@ if errorlevel 1 (
 set "NOW=%date% %time%"
 echo [%NOW%] OK GIT PREPARE SUCCESS
 echo [%NOW%] OK GIT PREPARE SUCCESS>>"%DEPLOY_LOG%"
+
+if /I "%PROJECT_NAME%"=="server" (
+    if exist "%PROJECT_ROOT%public" (
+        set "NOW=%date% %time%"
+        echo [%NOW%] STEP1 RESTORE PUBLIC TO %PROJECT_DIR%\public
+        echo [%NOW%] STEP1 RESTORE PUBLIC TO %PROJECT_DIR%\public>>"%DEPLOY_LOG%"
+        if exist "%PROJECT_DIR%\public" (
+            rmdir /s /q "%PROJECT_DIR%\public"
+        )
+        xcopy "%PROJECT_ROOT%public" "%PROJECT_DIR%\public" /E /I /Y>>"%DEPLOY_LOG%" 2>&1
+    )
+)
 
 set "NOW=%date% %time%"
 echo [%NOW%] STEP2 NPM INSTALL
