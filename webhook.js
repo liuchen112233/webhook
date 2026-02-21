@@ -4,19 +4,32 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const app = express();
+const { urlList } = require('./utils/constant.js');
 
 app.use(express.json({ limit: '1mb' })); // 限制请求体大小，防止攻击
 
 // ========== 核心配置（根据你的实际路径修改） ==========
 const CONFIG = {
-    SECRET: 'webhook_lanya', // 必须和Gitee/GitHub配置一致
-    DEPLOY_SCRIPT: 'auto_deploy.bat', // 名称，实际路径见下方拼接
-    LOG_DIR: './logs', // 日志目录
-    DEPLOY_BRANCH: 'dev', // 触发部署的分支
+    SECRET: 'webhook_lanya',
+    DEPLOY_SCRIPT: 'auto_deploy.bat',
+    LOG_DIR: './logs',
     PORT: 9000,
-    // 超时时间（防止脚本卡死）
-    EXEC_TIMEOUT: 30 * 60 * 1000 // 30分钟
+    EXEC_TIMEOUT: 30 * 60 * 1000
 };
+
+function resolveEnv(host) {
+    const h = (host || '').toLowerCase();
+    let branch;
+    let buildScript;
+    if (urlList.includes(h)) {
+        branch = process.env.DEPLOY_BRANCH_TEST || 'dev';
+        buildScript = process.env.DEPLOY_BUILD_SCRIPT_TEST || 'build:dev';
+    } else {
+        branch = process.env.DEPLOY_BRANCH_PROD || 'prod';
+        buildScript = process.env.DEPLOY_BUILD_SCRIPT_PROD || 'build';
+    }
+    return { branch, buildScript };
+}
 
 let LOG_DIR_PATH = path.isAbsolute(CONFIG.LOG_DIR) ? CONFIG.LOG_DIR : path.join(__dirname, CONFIG.LOG_DIR);
 try {
@@ -73,10 +86,11 @@ function runDeployScript(reason, config) {
         const cmd = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
         const env = {
             ...process.env,
-            DEPLOY_GIT_BRANCH: deployConfig.branch || CONFIG.DEPLOY_BRANCH,
+            DEPLOY_GIT_BRANCH: deployConfig.branch,
             DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName,
-            DEPLOY_REMOTE_URL: deployConfig.remoteUrl || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
-            DEPLOY_LOG_PATH: deployConfig.logPath || process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log')
+            DEPLOY_REMOTE_URL: deployConfig.remoteUrl,
+            DEPLOY_LOG_PATH: deployConfig.logPath,
+            DEPLOY_BUILD_SCRIPT: deployConfig.buildScript
         };
         if (deployConfig.projectDir) {
             env.DEPLOY_PROJECT_DIR = deployConfig.projectDir;
@@ -142,19 +156,23 @@ app.post('/webhook', async (req, res) => {
         let deployReason = '';
 
         // GitHub：PR合并到指定分支
+        const host = req.headers.host || '';
+        const envInfo = resolveEnv(host);
+        console.log(host, 'host')
+        console.log(envInfo, 'webhook')
         if (event === 'pull_request' && payload.action === 'closed' && payload.pull_request?.merged) {
             const targetBranch = payload.pull_request.base.ref;
-            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+            if (targetBranch === envInfo.branch) {
                 shouldDeploy = true;
-                deployReason = `GitHub PR #${payload.number} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+                deployReason = `GitHub PR #${payload.number} 合并到 ${envInfo.branch}`;
             }
         }
         // Gitee：MR合并到指定分支
         else if (event === 'Merge Request Hook' && payload.action === 'merge') {
             const targetBranch = payload.target_branch;
-            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+            if (targetBranch === envInfo.branch) {
                 shouldDeploy = true;
-                deployReason = `Gitee MR #${payload.iid} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+                deployReason = `Gitee MR #${payload.iid} 合并到 ${envInfo.branch}`;
             }
         }
 
@@ -163,13 +181,15 @@ app.post('/webhook', async (req, res) => {
             return res.send('Event ignored');
         }
 
+
         const deployConfig = {
-            branch: CONFIG.DEPLOY_BRANCH,
+            branch: envInfo.branch,
             pm2AppName: 'server',
             remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
             logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
-            projectDir: "server"
+            projectDir: "server",
+            buildScript: envInfo.buildScript
         };
 
         // 4. 执行部署（异步，避免请求超时）
@@ -213,18 +233,21 @@ app.post('/webhook_client', async (req, res) => {
 
         let shouldDeploy = false;
         let deployReason = '';
-
+        const host = req.headers.host || '';
+        const envInfo = resolveEnv(host);
+        console.log(host, 'host')
+        console.log(envInfo, 'webhook_client')
         if (event === 'pull_request' && payload.action === 'closed' && payload.pull_request?.merged) {
             const targetBranch = payload.pull_request.base.ref;
-            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+            if (targetBranch === envInfo.branch) {
                 shouldDeploy = true;
-                deployReason = `[frontend] GitHub PR #${payload.number} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+                deployReason = `[frontend] GitHub PR #${payload.number} 合并到 ${envInfo.branch}`;
             }
         } else if (event === 'Merge Request Hook' && payload.action === 'merge') {
             const targetBranch = payload.target_branch;
-            if (targetBranch === CONFIG.DEPLOY_BRANCH) {
+            if (targetBranch === envInfo.branch) {
                 shouldDeploy = true;
-                deployReason = `[frontend] Gitee MR #${payload.iid} 合并到 ${CONFIG.DEPLOY_BRANCH}`;
+                deployReason = `[frontend] Gitee MR #${payload.iid} 合并到 ${envInfo.branch}`;
             }
         }
 
@@ -234,12 +257,13 @@ app.post('/webhook_client', async (req, res) => {
         }
 
         const deployConfig = {
-            branch: CONFIG.DEPLOY_BRANCH,
-            pm2AppName: 'fronted', // 前端一般不需要 pm2
+            branch: envInfo.branch,
+            pm2AppName: 'client',
             remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/lanya.git',
             logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
-            projectDir: "client"
+            projectDir: "client",
+            buildScript: envInfo.buildScript
         };
 
         runDeployScript(deployReason, deployConfig)
@@ -269,7 +293,6 @@ app.get('/health', (req, res) => {
 // ========== 启动服务 ==========
 app.listen(CONFIG.PORT, '0.0.0.0', () => {
     log(`🎯 Webhook CI/CD服务已启动，监听端口：${CONFIG.PORT}`);
-    log(`📌 部署分支：${CONFIG.DEPLOY_BRANCH}`);
     log(`📜 日志文件：${LOG_FILE}`);
 });
 

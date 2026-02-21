@@ -37,10 +37,13 @@ echo [%NOW%] START DEPLOY
 echo [%NOW%] START DEPLOY>>"%DEPLOY_LOG%"
 
 set "PATH=%APPDATA%\npm;%ProgramFiles%\nodejs;%PATH%"
+if /I "%DEPLOY_SKIP_PM2%"=="1" goto skip_pm2_stop
 set "NOW=%date% %time%"
 echo [%NOW%] STEP0 PM2 STOP %PM2_APP_NAME%
 echo [%NOW%] STEP0 PM2 STOP %PM2_APP_NAME%>>"%DEPLOY_LOG%"
 call pm2 stop "%PM2_APP_NAME%">>"%DEPLOY_LOG%" 2>&1
+
+:skip_pm2_stop
 
 if exist "%PROJECT_DIR%" (
     set "NOW=%date% %time%"
@@ -112,16 +115,10 @@ if exist "%PROJECT_DIR%\package.json" (
         echo [%NOW%] INFO NO BUILD SCRIPT SKIP BUILD>>"%DEPLOY_LOG%"
     ) else (
         set "HAS_BUILD=1"
-        call npm run build:dev>>"%DEPLOY_LOG%" 2>&1
+        call :npm_build_with_retry
         if errorlevel 1 (
-            set "NOW=%date% %time%"
-            echo [%NOW%] ERROR NPM RUN BUILD FAILED
-            echo [%NOW%] ERROR NPM RUN BUILD FAILED>>"%DEPLOY_LOG%"
             exit /b 1
         )
-        set "NOW=%date% %time%"
-        echo [%NOW%] OK NPM RUN BUILD SUCCESS
-        echo [%NOW%] OK NPM RUN BUILD SUCCESS>>"%DEPLOY_LOG%"
     )
 )
 
@@ -145,6 +142,40 @@ if "%HAS_BUILD%"=="1" (
 set "NOW=%date% %time%"
 echo [%NOW%] OK DEPLOY FINISHED
 echo [%NOW%] OK DEPLOY FINISHED>>"%DEPLOY_LOG%"
+exit /b 0
+
+:npm_build_with_retry
+if "%DEPLOY_BUILD_SCRIPT%"=="" (
+    set "NPM_BUILD_SCRIPT=build:dev"
+) else (
+    set "NPM_BUILD_SCRIPT=%DEPLOY_BUILD_SCRIPT%"
+)
+set "BUILD_MAX_RETRY=2"
+set "BUILD_TRY=0"
+
+:npm_build_retry
+set /a BUILD_TRY+=1
+set "NOW=%date% %time%"
+echo [%NOW%] STEP3 NPM RUN BUILD %NPM_BUILD_SCRIPT% TRY %BUILD_TRY%
+echo [%NOW%] STEP3 NPM RUN BUILD %NPM_BUILD_SCRIPT% TRY %BUILD_TRY%>>"%DEPLOY_LOG%"
+call npm run %NPM_BUILD_SCRIPT%>>"%DEPLOY_LOG%" 2>&1
+if errorlevel 1 (
+    if %BUILD_TRY% LSS %BUILD_MAX_RETRY% (
+        set "NOW=%date% %time%"
+        echo [%NOW%] WARN NPM RUN BUILD FAILED RETRY %BUILD_TRY%
+        echo [%NOW%] WARN NPM RUN BUILD FAILED RETRY %BUILD_TRY%>>"%DEPLOY_LOG%"
+        timeout /t 5 /nobreak >nul
+        goto npm_build_retry
+    ) else (
+        set "NOW=%date% %time%"
+        echo [%NOW%] ERROR NPM RUN BUILD FAILED
+        echo [%NOW%] ERROR NPM RUN BUILD FAILED>>"%DEPLOY_LOG%"
+        exit /b 1
+    )
+)
+set "NOW=%date% %time%"
+echo [%NOW%] OK NPM RUN BUILD SUCCESS
+echo [%NOW%] OK NPM RUN BUILD SUCCESS>>"%DEPLOY_LOG%"
 exit /b 0
 
 :npm_install_with_retry
