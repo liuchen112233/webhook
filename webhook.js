@@ -175,6 +175,16 @@ app.post('/webhook', async (req, res) => {
                 deployReason = `Gitee MR #${payload.iid} 合并到 ${envInfo.branch}`;
             }
         }
+        // GitHub/Gitee：push到指定分支
+        else if (event === 'push' || event === 'Push Hook') {
+            const ref = payload.ref || '';
+            const headRef = `refs/heads/${envInfo.branch}`;
+            if (ref === headRef) {
+                shouldDeploy = true;
+                const who = payload.pusher?.name || payload.user_name || payload.sender?.login || 'unknown';
+                deployReason = `${isGitHub ? 'GitHub' : 'Gitee'} Push by ${who} -> ${envInfo.branch}`;
+            }
+        }
 
         if (!shouldDeploy) {
             log(`⏭️  跳过部署（事件不匹配：${event}）`);
@@ -248,6 +258,14 @@ app.post('/webhook_client', async (req, res) => {
             if (targetBranch === envInfo.branch) {
                 shouldDeploy = true;
                 deployReason = `[frontend] Gitee MR #${payload.iid} 合并到 ${envInfo.branch}`;
+            }
+        } else if (event === 'push' || event === 'Push Hook') {
+            const ref = payload.ref || '';
+            const headRef = `refs/heads/${envInfo.branch}`;
+            if (ref === headRef) {
+                shouldDeploy = true;
+                const who = payload.pusher?.name || payload.user_name || payload.sender?.login || 'unknown';
+                deployReason = `[frontend] ${isGitHub ? 'GitHub' : 'Gitee'} Push by ${who} -> ${envInfo.branch}`;
             }
         }
 
