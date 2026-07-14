@@ -33,7 +33,7 @@ function resolveEnv(host) {
     let branch;
     let buildScript;
     if (urlList.includes(h)) {
-        branch = process.env.DEPLOY_BRANCH_TEST || 'test';
+        branch = process.env.DEPLOY_BRANCH_TEST || 'dev';
         buildScript = process.env.DEPLOY_BUILD_SCRIPT_TEST || 'build:dev';
     } else {
         branch = process.env.DEPLOY_BRANCH_PROD || 'prod';
