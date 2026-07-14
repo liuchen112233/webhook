@@ -35,7 +35,7 @@ function resolveEnv(host) {
     let branch;
     let buildScript;
     if (urlList.includes(h)) {
-        branch = process.env.DEPLOY_BRANCH_TEST || 'dev';
+        branch = process.env.DEPLOY_BRANCH_TEST || 'test';
         buildScript = process.env.DEPLOY_BUILD_SCRIPT_TEST || 'build:dev';
     } else {
         branch = process.env.DEPLOY_BRANCH_PROD || 'prod';
@@ -170,7 +170,7 @@ function triggerManualDeploy({ target, envInfo, operator }) {
         `bash "${targetConfig.scriptPath}"`,
         {
             env: {
-                DEPLOY_ENV: envInfo.branch === 'prod' ? 'prod' : 'dev'
+                DEPLOY_ENV: envInfo.branch === 'prod' ? 'prod' : 'test'
             }
         }
     );
@@ -364,7 +364,7 @@ app.post('/deploy/manage', async (req, res) => {
 
     res.send({
         code: 200,
-        msg: `后管${envInfo.branch === 'prod' ? '生产' : '开发'}环境发版已触发`
+        msg: `后管${envInfo.branch === 'prod' ? '生产' : '测试'}环境发版已触发`
     });
 });
 
@@ -383,7 +383,7 @@ app.post('/deploy/service', async (req, res) => {
 
     res.send({
         code: 200,
-        msg: `服务${envInfo.branch === 'prod' ? '生产' : '开发'}环境发版已触发`
+        msg: `服务${envInfo.branch === 'prod' ? '生产' : '测试'}环境发版已触发`
     });
 });
 
