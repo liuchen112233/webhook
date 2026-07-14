@@ -27,8 +27,6 @@ const CONFIG = {
 };
 const SCRIPT_BAT = path.join(__dirname, 'auto_deploy.bat');
 const SCRIPT_SH = path.join(__dirname, 'auto_deploy.sh');
-const DEPLOY_MANAGE_SH = path.join(__dirname, 'deploy_manage.sh');
-const DEPLOY_SERVER_SH = path.join(__dirname, 'deploy_server.sh');
 
 function resolveEnv(host) {
     const h = (host || '').toLowerCase();
@@ -150,30 +148,36 @@ function runDeployScript(reason, config) {
 }
 
 function triggerManualDeploy({ target, envInfo, operator }) {
-    const targetConfig = {
-        manage: {
-            scriptPath: DEPLOY_MANAGE_SH,
-            label: '后管发版'
-        },
-        service: {
-            scriptPath: DEPLOY_SERVER_SH,
-            label: '服务发版'
-        }
-    }[target];
-
-    if (!targetConfig) {
-        return Promise.reject(new Error('未知发版目标'));
+    if (target === 'manage') {
+        return runDeployScript(
+            `[manual] 后管发版 ${envInfo.branch} by ${operator || 'unknown'}`,
+            {
+                branch: envInfo.branch,
+                pm2AppName: 'client',
+                remoteUrl: process.env.FRONT_DEPLOY_REMOTE_URL || process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/lanya.git',
+                logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
+                timeout: CONFIG.EXEC_TIMEOUT,
+                projectDir: 'client',
+                buildScript: envInfo.buildScript
+            }
+        );
+    }
+    if (target === 'service') {
+        return runDeployScript(
+            `[manual] 服务发版 ${envInfo.branch} by ${operator || 'unknown'}`,
+            {
+                branch: envInfo.branch,
+                pm2AppName: 'server',
+                remoteUrl: process.env.DEPLOY_REMOTE_URL || 'git@github.com:liuchen112233/yayaspeakingserver.git',
+                logPath: process.env.DEPLOY_LOG_PATH || path.join(__dirname, 'deploy.log'),
+                timeout: CONFIG.EXEC_TIMEOUT,
+                projectDir: 'server',
+                buildScript: envInfo.buildScript
+            }
+        );
     }
 
-    return runScript(
-        `[manual] ${targetConfig.label} ${envInfo.branch} by ${operator || 'unknown'}`,
-        `bash "${targetConfig.scriptPath}"`,
-        {
-            env: {
-                DEPLOY_ENV: envInfo.branch === 'prod' ? 'prod' : 'test'
-            }
-        }
-    );
+    return Promise.reject(new Error('未知发版目标'));
 }
 
 // ========== Webhook核心接口 ==========
