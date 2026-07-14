@@ -7,15 +7,28 @@ const app = express();
 const { urlList } = require('./utils/constant.js');
 
 app.use(express.json({ limit: '1mb' })); // 限制请求体大小，防止攻击
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Gitee-Token, X-Hub-Signature-256');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(204);
+        return;
+    }
+    next();
+});
 
 // ========== 核心配置（根据你的实际路径修改） ==========
 const CONFIG = {
     SECRET: 'webhook_lanya',
-    DEPLOY_SCRIPT: 'auto_deploy.bat',
     LOG_DIR: './logs',
     PORT: 9000,
     EXEC_TIMEOUT: 30 * 60 * 1000
 };
+const SCRIPT_BAT = path.join(__dirname, 'auto_deploy.bat');
+const SCRIPT_SH = path.join(__dirname, 'auto_deploy.sh');
+const DEPLOY_MANAGE_SH = path.join(__dirname, 'deploy_manage.sh');
+const DEPLOY_SERVER_SH = path.join(__dirname, 'deploy_server.sh');
 
 function resolveEnv(host) {
     const h = (host || '').toLowerCase();
@@ -75,29 +88,15 @@ function verifyGiteeToken(req) {
 }
 
 // ========== 执行部署脚本（带超时控制） ==========
-const SCRIPT_BAT = path.join(__dirname, 'auto_deploy.bat');
-const SCRIPT_SH = path.join(__dirname, 'auto_deploy.sh');
-function runDeployScript(reason, config) {
+function runScript(reason, command, options = {}) {
     return new Promise((resolve, reject) => {
         log(`🚀 开始部署 - 原因：${reason}`);
-        const deployConfig = config || {};
-        const isWin = process.platform === 'win32';
-        const scriptPath = isWin ? SCRIPT_BAT : SCRIPT_SH;
-        const cmd = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
-        const env = {
-            ...process.env,
-            DEPLOY_GIT_BRANCH: deployConfig.branch,
-            DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName,
-            DEPLOY_REMOTE_URL: deployConfig.remoteUrl,
-            DEPLOY_LOG_PATH: deployConfig.logPath,
-            DEPLOY_BUILD_SCRIPT: deployConfig.buildScript
-        };
-        if (deployConfig.projectDir) {
-            env.DEPLOY_PROJECT_DIR = deployConfig.projectDir;
-        }
-        const child = exec(cmd, {
-            timeout: deployConfig.timeout || CONFIG.EXEC_TIMEOUT,
-            env
+        const child = exec(command, {
+            timeout: options.timeout || CONFIG.EXEC_TIMEOUT,
+            env: {
+                ...process.env,
+                ...(options.env || {})
+            }
         });
 
         // 超时处理
@@ -124,6 +123,57 @@ function runDeployScript(reason, config) {
             reject(new Error(`脚本执行异常：${err.message}`));
         });
     });
+}
+
+function runDeployScript(reason, config) {
+    const deployConfig = config || {};
+    const isWin = process.platform === 'win32';
+    const scriptPath = isWin ? SCRIPT_BAT : SCRIPT_SH;
+    const command = isWin ? `"${scriptPath}"` : `bash "${scriptPath}"`;
+    const env = {
+        DEPLOY_GIT_BRANCH: deployConfig.branch,
+        DEPLOY_PM2_APP_NAME: deployConfig.pm2AppName,
+        DEPLOY_REMOTE_URL: deployConfig.remoteUrl,
+        DEPLOY_LOG_PATH: deployConfig.logPath,
+        DEPLOY_BUILD_SCRIPT: deployConfig.buildScript
+    };
+    if (deployConfig.projectDir) {
+        env.DEPLOY_PROJECT_DIR = deployConfig.projectDir;
+    }
+    if (deployConfig.skipPm2) {
+        env.DEPLOY_SKIP_PM2 = '1';
+    }
+    return runScript(reason, command, {
+        timeout: deployConfig.timeout,
+        env
+    });
+}
+
+function triggerManualDeploy({ target, envInfo, operator }) {
+    const targetConfig = {
+        manage: {
+            scriptPath: DEPLOY_MANAGE_SH,
+            label: '后管发版'
+        },
+        service: {
+            scriptPath: DEPLOY_SERVER_SH,
+            label: '服务发版'
+        }
+    }[target];
+
+    if (!targetConfig) {
+        return Promise.reject(new Error('未知发版目标'));
+    }
+
+    return runScript(
+        `[manual] ${targetConfig.label} ${envInfo.branch} by ${operator || 'unknown'}`,
+        `bash "${targetConfig.scriptPath}"`,
+        {
+            env: {
+                DEPLOY_ENV: envInfo.branch === 'prod' ? 'prod' : 'dev'
+            }
+        }
+    );
 }
 
 // ========== Webhook核心接口 ==========
@@ -297,6 +347,44 @@ app.post('/webhook_client', async (req, res) => {
         log(`❌ [frontend] Webhook接口异常：${err.message}`);
         res.status(500).send('Internal server error');
     }
+});
+
+app.post('/deploy/manage', async (req, res) => {
+    const host = req.headers.host || '';
+    const envInfo = resolveEnv(host);
+    triggerManualDeploy({
+        target: 'manage',
+        envInfo,
+        operator: req.body?.operator || 'manual'
+    }).then(() => {
+        log(`✅ [manual] 后管发版已触发，分支：${envInfo.branch}`);
+    }).catch((err) => {
+        log(`❌ [manual] 后管发版失败：${err.message}`);
+    });
+
+    res.send({
+        code: 200,
+        msg: `后管${envInfo.branch === 'prod' ? '生产' : '开发'}环境发版已触发`
+    });
+});
+
+app.post('/deploy/service', async (req, res) => {
+    const host = req.headers.host || '';
+    const envInfo = resolveEnv(host);
+    triggerManualDeploy({
+        target: 'service',
+        envInfo,
+        operator: req.body?.operator || 'manual'
+    }).then(() => {
+        log(`✅ [manual] 服务发版已触发，分支：${envInfo.branch}`);
+    }).catch((err) => {
+        log(`❌ [manual] 服务发版失败：${err.message}`);
+    });
+
+    res.send({
+        code: 200,
+        msg: `服务${envInfo.branch === 'prod' ? '生产' : '开发'}环境发版已触发`
+    });
 });
 
 // ========== 健康检查接口 ==========
