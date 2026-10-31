@@ -141,6 +141,9 @@ function runDeployScript(reason, config) {
     if (deployConfig.skipPm2) {
         env.DEPLOY_SKIP_PM2 = '1';
     }
+    if (deployConfig.cloneOnly) {
+        env.DEPLOY_CLONE_ONLY = '1';
+    }
     return runScript(reason, command, {
         timeout: deployConfig.timeout,
         env
@@ -158,7 +161,8 @@ function triggerManualDeploy({ target, envInfo, operator }) {
                 logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
                 timeout: CONFIG.EXEC_TIMEOUT,
                 projectDir: 'client',
-                buildScript: envInfo.buildScript
+                buildScript: envInfo.buildScript,
+                cloneOnly: true
             }
         );
     }
@@ -335,7 +339,8 @@ app.post('/webhook_client', async (req, res) => {
             logPath: process.env.FRONT_DEPLOY_LOG_PATH || path.join(__dirname, 'deploy_frontend.log'),
             timeout: CONFIG.EXEC_TIMEOUT,
             projectDir: "client",
-            buildScript: envInfo.buildScript
+            buildScript: envInfo.buildScript,
+            cloneOnly: true
         };
 
         runDeployScript(deployReason, deployConfig)

@@ -118,6 +118,12 @@ if [ "$PROJECT_NAME" = "server" ] && [ -d "${PROJECT_ROOT}public" ]; then
   cp -a "${PROJECT_ROOT}public" "$PROJECT_DIR/public" >>"$DEPLOY_LOG" 2>&1
 fi
 
+if [ "${DEPLOY_CLONE_ONLY:-}" = "1" ]; then
+  log "STEP2 CLONE ONLY MODE ENABLED, SKIP NPM/BUILD/PM2"
+  log "OK DEPLOY FINISHED"
+  exit 0
+fi
+
 log "STEP2 NPM INSTALL"
 if [ -f "$PROJECT_DIR/package.json" ]; then
   npm_install_with_retry || exit 1

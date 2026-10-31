@@ -117,6 +117,16 @@ if /I "%PROJECT_NAME%"=="server" (
     )
 )
 
+if /I "%DEPLOY_CLONE_ONLY%"=="1" (
+    set "NOW=%date% %time%"
+    echo [%NOW%] STEP2 CLONE ONLY MODE ENABLED, SKIP NPM/BUILD/PM2
+    echo [%NOW%] STEP2 CLONE ONLY MODE ENABLED, SKIP NPM/BUILD/PM2>>"%DEPLOY_LOG%"
+    set "NOW=%date% %time%"
+    echo [%NOW%] OK DEPLOY FINISHED
+    echo [%NOW%] OK DEPLOY FINISHED>>"%DEPLOY_LOG%"
+    exit /b 0
+)
+
 set "NOW=%date% %time%"
 echo [%NOW%] STEP2 NPM INSTALL
 echo [%NOW%] STEP2 NPM INSTALL>>"%DEPLOY_LOG%"
